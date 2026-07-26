@@ -1,0 +1,60 @@
+name: Build Android 5 APK
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'Note3-LAN-Backup.apk'
+      - 'Note3-LAN-Backup.sha256.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install required SDK packages
+        run: |
+          yes | sdkmanager --licenses >/dev/null
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Build debug APK
+        run: gradle :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Prepare downloadable APK
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk Note3-LAN-Backup.apk
+          sha256sum Note3-LAN-Backup.apk > Note3-LAN-Backup.sha256.txt
+
+      - name: Commit APK to repository
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Note3-LAN-Backup.apk Note3-LAN-Backup.sha256.txt
+          if git diff --cached --quiet; then
+            echo "APK unchanged"
+          else
+            git commit -m "build: publish Android 5 LAN backup APK [skip ci]"
+            git push
+          fi
